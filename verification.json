@@ -1,0 +1,26 @@
+{
+  "project": {
+    "identical_numerical_and_data_files": 25,
+    "calibration_shape": [
+      3000,
+      16
+    ],
+    "chirp_shape": [
+      3000
+    ],
+    "synthetic_volume_shape": [
+      8,
+      4,
+      4
+    ],
+    "volume_sha256": "5c1e49889160de8034f4f2c3323cd0d1622cb3c5e6f3447335643496b7a81d73",
+    "exact_reference_parity": true,
+    "byte_identical_files": 25,
+    "numerical_statements_unchanged": true
+  },
+  "environment": {
+    "numpy": "2.5.3",
+    "torch": "2.14.0",
+    "h5py": "3.16.0"
+  }
+}
