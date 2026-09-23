@@ -19,7 +19,7 @@ python3 FitGaussianPSF.py
 python3 ADMMReconstruction.py letter_H
 ```
 
-The point-spread-function fit must precede iterative reconstruction. Other scene names are listed by the reconstruction script. Run scenes individually: the existing `all` handling in the initial reconstruction command assigns `scenes` but still iterates `scene`, so it does not dispatch every scene. This inherited behavior is documented rather than silently changing the reconstruction code.
+The point-spread-function fit must precede iterative reconstruction. Other scene names are listed by the reconstruction script. Use `python3 AcousticNLOSReconstruction.py all` to dispatch all nine supported scenes in the existing order. A command-line variable-name error was fixed; the per-scene numerical implementation is unchanged.
 
 ## Inputs and outputs
 

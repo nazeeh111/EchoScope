@@ -493,7 +493,7 @@ if __name__ == '__main__':
         reconstruction.usage()
 
     if scene == ['all']:
-        scenes = valid_scenes
+        scene = valid_scenes
 
     for s in scene:
         if s not in valid_scenes:
