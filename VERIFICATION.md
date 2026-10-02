@@ -18,3 +18,7 @@ The `all` branch assigned `scenes` but the loop consumed `scene`, so it showed u
 An isolated local CPU environment used NumPy 2.5.3, PyTorch 2.14.0, h5py 3.16.0, SciPy 1.18.1, and Matplotlib 3.11.2. It did not replace the archived dependency manifests or modify shared environments.
 
 [Machine-readable check results](verification.json) record dimensions and available checks.
+
+## Continuous command checks
+
+The scene-dispatch workflow runs the four existing standard-library regression tests on Python 3.12. It executes the actual command-line block with the capture-processing worker replaced, covering the all-scenes order, explicitly selected scenes, invalid input and empty input. It protects the repaired dispatcher without installing the legacy numerical stack or loading external measurements; it does not establish acoustic reconstruction accuracy.
