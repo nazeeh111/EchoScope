@@ -1,6 +1,6 @@
 # EchoScope
 
-**Development history:** Developed locally using Git before publication. These projects were published to GitHub together, so similar upload dates do not indicate when development began.
+This repository packages [AcousticNLOS](https://github.com/computational-imaging/AcousticNLOS/tree/babd679b74240e8dd10fd48b3b3aa61590513c76), by **David B. Lindell, Gordon Wetzstein and Vladlen Koltun**, for the CVPR 2019 acoustic non-line-of-sight imaging method. EchoScope adds command-line dispatch repair, regression checks, documentation and repository presentation. The original methods, datasets and reported research results belong to the cited source. [Source and additions](NOTICE.md).
 
 ![EchoScope](assets/identity.svg)
 
