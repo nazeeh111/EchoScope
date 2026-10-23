@@ -6,24 +6,43 @@ Reconstruct hidden scenes from frequency-swept acoustic measurements. The workfl
 
 EchoScope includes repaired command-line scene dispatch, regression checks and setup documentation.
 
-## Run
-
-Use Python with the versions recorded in `requirements.txt` for the original environment. These are legacy pins; installation on current Python may require an older isolated interpreter. Numerical source and its defaults are preserved.
-
-Download the [measurement dataset](https://drive.google.com/a/stanford.edu/file/d/1pnRiD3e4EQiu-akvHkCMOyghwbVtQuvt/view?usp=sharing) separately and place it in `data/`. Dataset availability has not been verified in this publication.
+## Inspect the command path without captures
 
 ```sh
+python3 -m unittest discover -s tests -v
+```
+
+These four standard-library checks exercise the actual scene dispatcher with its expensive reconstruction worker replaced. They verify scene selection and order without installing the legacy numerical stack or loading measurements. They do not reconstruct a hidden scene.
+
+## Reconstruct an external capture
+
+Run from the repository root, using the original environment versions in `requirements.txt`. These are legacy pins; a current Python installation may not accept them. The numerical pipeline and plotting defaults are retained. This is an archived research workflow, not a packaged sensing app.
+
+Download the [measurement dataset](https://drive.google.com/a/stanford.edu/file/d/1pnRiD3e4EQiu-akvHkCMOyghwbVtQuvt/view?usp=sharing) separately and place its scene `.pkl` captures in `data/`. Dataset availability has not been verified. Calibration tables alone are not enough to reconstruct a scene.
+
+Follow the dependency order below. The point-spread function (PSF) describes the spatial blur used by iterative refinement:
+
+```sh
+# Initial scene volume and calibration-target volume:
 python3 AcousticNLOSReconstruction.py letter_H
 python3 AcousticNLOSReconstruction.py psf
+# Fit the calibration-target PSF before refining a scene:
 python3 FitGaussianPSF.py
+# The inherited iterative writer uses this separate destination:
+mkdir -p chimera/raw
 python3 ADMMReconstruction.py letter_H
 ```
 
-The point-spread-function fit must precede iterative reconstruction. Other scene names are listed by the reconstruction script. Use `python3 AcousticNLOSReconstruction.py all` to dispatch all nine supported scenes in the existing order. A command-line variable-name error was fixed; the per-scene numerical implementation is unchanged.
+### Follow the files
 
-## Inputs and outputs
+1. **Capture → calibrated frequency data:** `data/letter_H.pkl` becomes `data/letter_H.npy`. An available `letter_H_bg.pkl` is demodulated separately for background subtraction. Existing demodulated arrays are reused unless the source's `overwrite_raw` option is changed.
+2. **Initial reconstruction:** the default plotting path writes `data/letter_H.png` and `data/letter_H_out.npy`. The latter holds the volume and metadata consumed by iterative refinement. Turning off `enable_plotting` also disables this save in the retained implementation.
+3. **PSF fit:** `FitGaussianPSF.py` reads `data/psf_out.npy`, opens its fit plots, then writes `data/psf_gaussian.npy` and `data/psf_gaussian_params.npy`.
+4. **Iterative result:** on convergence, `ADMMReconstruction.py` writes `chimera/raw/letter_H_admm_out.npy`. That inherited output directory must exist. Use a working copy of prior results: plotting, fitting and final-save paths can replace files with the same names.
 
-Microphone calibration tables are included. Raw measurement captures are external. Initial volume arrays feed the fitted deconvolution and iterative pipeline; plotting and saved arrays retain their existing names, shapes, and conventions. The defaults use a 48 kHz sample rate, 2–20 kHz chirp, and 16 transmit/receive channels.
+Initial reconstruction supports `double`, `letter_H`, `corner_reflectors`, `psf`, `resolution_corner1m`, `resolution_corner2m`, `resolution_plane1m`, `resolution_plane2m` and `letters_LT`. The `all` selector dispatches them in that order. Iterative refinement supports only `double`, `letter_H`, `corner_reflectors` and `letters_LT`.
+
+The defaults use a 48 kHz sample rate, 2–20 kHz chirp and 16 transmit/receive channels. Raw captures and a reconstructed-scene volume are not bundled. No microphone, speaker or hardware acquisition command is provided by this workflow.
 
 ## Verification
 
