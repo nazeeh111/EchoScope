@@ -4,8 +4,6 @@
 
 Reconstruct hidden scenes from frequency-swept acoustic measurements. The workflow includes microphone calibration, demodulation, initial volume reconstruction, point-spread-function fitting, and iterative refinement.
 
-EchoScope includes repaired command-line scene dispatch, regression checks and setup documentation.
-
 ## Inspect the command path without captures
 
 ```sh
@@ -48,8 +46,6 @@ The defaults use a 48 kHz sample rate, 2–20 kHz chirp and 16 transmit/receive 
 
 See [verification](VERIFICATION.md) for exact local checks and limits. Small synthetic kernels establish numerical consistency, not captured-scene replication. `util/lct.py` includes an unused standalone `lct` helper with an inherited argument mismatch; the main reconstruction uses `run_lct` instead.
 
-## Source and license
+## License
 
-Based on [AcousticNLOS](https://github.com/computational-imaging/AcousticNLOS/tree/babd679b74240e8dd10fd48b3b3aa61590513c76) by **David B. Lindell, Gordon Wetzstein and Vladlen Koltun**. [Source and contribution details](NOTICE.md).
-
-Maintained by **nazeeh111**. Separate bundled component notices remain in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The reconstruction source uses the [MIT license](LICENSE); new documentation and presentation use [MIT](LICENSE-BRANDING). Separate bundled component notices remain in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). [Source details](NOTICE.md).
