@@ -244,7 +244,7 @@ class AcousticNLOSReconstruction:
                             'fend_idx': self.fend_idx, 'f': self.f,
                             'f0': self.f0, 'f1': self.f1, 'B': self.B,
                             'fstart': self.fstart, 'fend': self.fend, 'T': self.T, 'v': self.v, 
-                            'processed_data': processed_data_to_save}
+                            'processed_data': processed_data}
                 np.save(data_file.replace('.npy', '_out.npy'), out_dict)
 
     def DMO(self, cmp_stack, mp, offset):
