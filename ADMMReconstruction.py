@@ -23,8 +23,6 @@ SOFTWARE.
 '''
 
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt 
 import util.lct as lct
 import os
 from util.pypher import psf2otf
@@ -32,7 +30,8 @@ from numpy.fft import ifftn, fftn
 from types import SimpleNamespace
 from time import time
 import sys
-matplotlib.rcParams.update({'font.size': 6})
+from pathlib import Path
+import tempfile
 
 plot_every = 5 
 do_plots = True
@@ -68,16 +67,41 @@ def gaussian_kernel(size, sigma, size_y=None, size_z=None):
 
 def shrinkage(vy, vx, vz, kappa):
         vv = np.sqrt(vy**2 + vx**2 + vz**2)
-        zy = np.maximum(1 - kappa / abs(vv), 0) * vy
-        zx = np.maximum(1 - kappa / abs(vv), 0) * vx
-        zz = np.maximum(1 - kappa / abs(vv), 0) * vz
-        return zy, zx, zz
+        factor = np.zeros_like(vv)
+        np.divide(kappa, vv, out=factor, where=vv != 0)
+        factor = np.where(vv != 0, np.maximum(1 - factor, 0), 0)
+        return factor * vy, factor * vx, factor * vz
 
 def fconv(x, otf):
     return np.real(ifftn(fftn(x) * otf))
 
-def run(scene):
+def run(scene, *, data_dir='data', output_dir='chimera/raw', max_iters=100000,
+        plotting=None, absolute_tolerance=1e-3, relative_tolerance=1e-3):
+    """Refine a trusted local reconstruction checkpoint with bounded ADMM.
+
+    Existing run(scene) calls retain the scene presets and plotting default.
+    Numerical callers may disable plotting and choose explicit input/output
+    directories and an iteration limit. This does not acquire measurements.
+    """
     global plot_every 
+    if scene not in ('letter_H', 'corner_reflectors', 'double', 'letters_LT'):
+        raise ValueError('Unknown iterative reconstruction scene: ' + str(scene))
+    if not isinstance(max_iters, (int, np.integer)) or isinstance(max_iters, (bool, np.bool_)) or max_iters < 1:
+        raise ValueError('max_iters must be a positive integer')
+    tolerances = np.asarray([absolute_tolerance, relative_tolerance], dtype=float)
+    if (tolerances.shape != (2,) or not np.isfinite(tolerances).all()
+            or np.any(tolerances <= 0)):
+        raise ValueError('Convergence tolerances must be finite positive scalars')
+    data_dir, output_dir = Path(data_dir), Path(output_dir)
+    out_fname = scene + '_admm_out.npy'
+    output_path = output_dir / out_fname
+    if os.path.lexists(output_path):
+        raise FileExistsError('Refusing to replace existing ADMM result: {}. Choose a new output directory.'.format(output_path))
+    enable_plotting = do_plots if plotting is None else bool(plotting)
+    if enable_plotting:
+        import matplotlib
+        import matplotlib.pyplot as plt
+        matplotlib.rcParams.update({'font.size': 6})
 
     # set parameters
     finished = False
@@ -87,11 +111,9 @@ def run(scene):
     snr = 8e3
     dx = 0.9 
     dy = 0.95 
-    eps_abs = 1e-3
-    eps_rel = 1e-3
+    eps_abs, eps_rel = tolerances
 
-    ckpt = np.load('data/' + scene + '_out.npy', allow_pickle=True)[()]    
-    out_fname = scene + '_admm_out.npy'
+    ckpt = np.load(data_dir / (scene + '_out.npy'), allow_pickle=True)[()]
 
     if scene == 'letter_H':
         rho = 1e-1
@@ -129,6 +151,10 @@ def run(scene):
 
     # set params
     dat = SimpleNamespace(**ckpt)
+    b = np.asarray(dat.meas)
+    if b.ndim != 3 or not np.isfinite(b).all() or min(b.shape) < 3:
+        raise ValueError('ADMM measurements must be finite [range, y, x] arrays with every axis at least three')
+    b = b.copy()
     Nx = dat.meas.shape[2] 
     Ny = dat.meas.shape[1] 
     Nt = dat.meas.shape[0] 
@@ -148,15 +174,15 @@ def run(scene):
 
     # lct params
     def pad_array(x, S, Nt, Nx, Ny):
-        return np.pad(x, ((S*Nt//2, S*Nt//2), (Ny//2, Ny//2), (Nx//2, Nx//2)), 'constant')
+        return np.pad(x, tuple((n//2, n-n//2) for n in x.shape), 'constant')
 
     def trim_array(x, S, Nt, Nx, Ny):
-        return x[S*int(np.floor(Nt/2))+1:-S*int(np.ceil(Nt/2))+1, Ny//2+1:-Ny//2+1, Nx//2+1:-Nx//2+1]
+        starts = (S*(Nt//2)+1, Ny//2+1, Nx//2+1)
+        return x[tuple(slice(a, a+n) for a, n in zip(starts, (S*Nt, Ny, Nx)))]
 
     def p2o(x):
         return psf2otf(x, b.shape)
 
-    b = dat.meas.copy()
     if use_lct:
         # get LCT kernel and calculate initial reconstruction
         A, AFT = lct.getPSF(Nx, Ny, Nt, S, slope_x, slope_y)
@@ -174,7 +200,7 @@ def run(scene):
         b = pad_array(b, S, Nt, Nx, Ny)
 
         # add spatial blur as well
-        A_blur = np.load('data/psf_gaussian.npy')
+        A_blur = np.load(data_dir / 'psf_gaussian.npy', allow_pickle=False)
         A_blur = np.pad(A_blur[:, :, None], ((0, 0), (0, 0), (A_blur.shape[0]//2, A_blur.shape[0]//2)), 'constant')
         A_blur = np.transpose(A_blur, (2, 0, 1))
         AFT_blur = p2o(A_blur)
@@ -182,7 +208,7 @@ def run(scene):
 
     else:
         # load fitted gaussian kernel
-        A = np.load('data/psf_gaussian.npy')
+        A = np.load(data_dir / 'psf_gaussian.npy', allow_pickle=False)
         A = np.pad(A[:, :, None], ((0, 0), (0, 0), (A.shape[0]//2, A.shape[0]//2)), 'constant')
         A = np.transpose(A, (2, 0, 1))
         AFT = p2o(A)
@@ -196,7 +222,6 @@ def run(scene):
     bFT = fftn(b)
     
     # run admm
-    max_iters = 100000
     z1 = np.zeros((b.shape))
     z2 = np.zeros((b.shape))
     z3 = np.zeros((b.shape))
@@ -218,6 +243,8 @@ def run(scene):
     u4 = np.zeros((b.shape))
     primal_residual = []
     dual_residual = []
+    primal_tolerance = []
+    dual_tolerance = []
     timing = []
 
     assert(use_l1 or use_tv)
@@ -237,11 +264,11 @@ def run(scene):
         # z1 update (sparsity)
         # save z_prev
         if use_l1:
+            z1_prev = z1.copy()
             k1 = x.copy()
             v = x + u1;
             kappa = lambda_l1 / rho;
             z1 = np.maximum(v - kappa, 0) - np.maximum(-v - kappa, 0)   
-            z1_prev = z1.copy()
 
         # z2-z4 update (tv)
         if use_tv:
@@ -301,8 +328,12 @@ def run(scene):
         ktu_norm = np.sqrt(np.sum(ktu.ravel()**2))
         kx_norm = np.sqrt(kx_norm)
         z_norm = np.sqrt(z_norm)
-        eps_pri = eps_abs * np.sqrt(N_scale*Nx*Ny*Nt) + eps_rel * np.maximum(kx_norm, z_norm)
-        eps_dual = eps_abs * np.sqrt(Nx*Ny*Nt)  + eps_rel * ktu_norm
+        # K stacks the active identity and three circular differences. x has
+        # b.size variables, including the padded LCT grid; z has N_scale times
+        # that many constraints. u is the SCALED dual (y = rho*u), so the dual
+        # threshold uses ||K.T*y|| = rho*||K.T*u||.
+        eps_pri = eps_abs * np.sqrt(N_scale*b.size) + eps_rel * np.maximum(kx_norm, z_norm)
+        eps_dual = eps_abs * np.sqrt(b.size) + eps_rel * rho * ktu_norm
 
         print('Iter: {}'.format(i))
         print('===Primal/Dual Thresholds===')
@@ -310,6 +341,10 @@ def run(scene):
         print('===Primal/Dual Residuals===')
         print('{:.02f}, {:.02f}'.format(resid_pri, resid_dual))
         print()
+        primal_residual.append(resid_pri)
+        dual_residual.append(resid_dual)
+        primal_tolerance.append(eps_pri)
+        dual_tolerance.append(eps_dual)
 
         # check stopping criterion
         if resid_pri < eps_pri and resid_dual < eps_dual:
@@ -319,8 +354,23 @@ def run(scene):
             else:
                 x_out = x.copy()
 
-            out_dict = {'out': x_out, 'iter': i, 'primal_residual': primal_residual, 'timing': timing, 'dual_residual': dual_residual}
-            np.save('chimera/raw/' + out_fname, out_dict)
+            timing.append(time() - start)
+            out_dict = {'out': x_out, 'iter': i, 'primal_residual': primal_residual,
+                        'timing': timing, 'dual_residual': dual_residual, 'converged': True,
+                        'primal_tolerance': primal_tolerance, 'dual_tolerance': dual_tolerance,
+                        'working_shape': b.shape, 'variable_count': b.size,
+                        'constraint_count': N_scale*b.size}
+            output_dir.mkdir(parents=True, exist_ok=True)
+            # Write fully in an owned staging directory, then publish with an
+            # exclusive hard link. Unlike replace/np.save(path), link cannot
+            # clobber an output created after the admission check above.
+            with tempfile.TemporaryDirectory(prefix='.admm-', dir=output_dir) as staging:
+                staged = Path(staging) / out_fname
+                np.save(staged, out_dict)
+                try:
+                    os.link(staged, output_path)
+                except FileExistsError as error:
+                    raise FileExistsError('Refusing to replace existing ADMM result: {}. Choose a new output directory.'.format(output_path)) from error
             finished = True
 
         if not finished:
@@ -339,8 +389,6 @@ def run(scene):
             # record timing
             stop = time()
             timing.append(stop - start)
-            primal_residual.append(resid_pri)
-            dual_residual.append(resid_dual)
 
             if use_lct:
                 x_out = trim_array(x, S, Nt, Nx, Ny)
@@ -349,7 +397,7 @@ def run(scene):
                 x_out = x.copy() 
 
         # plots
-        if do_plots and i % plot_every == 0:
+        if enable_plotting and (i % plot_every == 0 or finished):
             plt.clf()
             plt.subplot(3,3,7)
             plt.imshow(np.max(x_out, axis=1).squeeze(), aspect='auto')
@@ -390,9 +438,12 @@ def run(scene):
              
             if finished:
                 plt.pause(1)
-                break
             else:
                 plt.pause(0.01)
+        if finished:
+            return out_dict
+    raise RuntimeError('ADMM did not converge after {} iterations; final primal={}, dual={}'.format(
+        max_iters, primal_residual[-1], dual_residual[-1]))
 
 if __name__ == '__main__':
     valid_scenes = ['double', 'corner_reflectors',  'letter_H', 'letters_LT']

@@ -1,5 +1,9 @@
 # Local verification
 
+The sections below record successive checkpoints. Earlier statements about
+plotting-dependent saves and unexecuted iterative code describe earlier source;
+the final iterative/headless section supersedes them for current source.
+
 Numerical checks executed 2026-09-22; command-line dispatch checked 2026-09-23. These are bounded local checks, not research replication.
 
 - At that earlier checkpoint, the publication compared 25 numerical source, calibration, and related files byte-for-byte. After the command-line fix below, 24 remained byte-identical; `AcousticNLOSReconstruction.py` differed only in the corrected dispatch assignment. Its entire reconstruction class and numerical methods were unchanged at that checkpoint.
@@ -30,3 +34,81 @@ The optional `confocalReconstruction(..., save_npy=True)` save referenced an und
 ## Confocal-save CI gate
 
 The existing dispatcher job, workflow triggers and read-only permissions are retained. A separate job on Ubuntu 24.04 x64 uses Python 3.12 and installs only the NumPy 2.5.4 binary wheel, without dependencies. It discovers only `test_confocal_save.py` and rejects a method count other than three, any skip or expected failure, and any unsuccessful result. This NumPy pin is test-only; archived project dependency manifests are unchanged. It does not install the legacy stack or run acquisition, calibration, PSF, plotting, native LCT or ADMM. The optional no-NumPy skip remains available for local capture-free checks; the dedicated CI job cannot pass by skipping the save regressions.
+
+
+## Production numerical core (2026-10-29)
+
+The supported `run_lct` failed for odd spatial grids: an 8×3×5 input padded to 32×5×9, while its PSF was 32×6×10. The numerical block now lives in `util.lct.reconstruct`, shared by the existing class method and a NumPy-only example. Asymmetric right padding gives exactly doubled dimensions; explicit crop lengths also fix silently empty outputs on spatial axes of length two. The established one-bin offset and working even-grid behavior are retained. Four random-input grids with spatial axes at least four produced bit-identical arrays against the original method on the same runtime (maximum difference zero). The unrelated legacy standalone `lct` helper remains unsupported and unchanged.
+
+Four numerical test methods exercise actual production reconstruction. A reference builds the PSF and interpolation weights independently and evaluates dense direct DFT matrices instead of FFTs, covering rectangular, odd/even and single-cell spatial grids. Further checks cover the existing class adapter with the real core, invalid inputs, zero input, changed numerical impulses and preservation of existing output bytes. This adapter test loads the method without running the capture/plotting constructor; it does not validate those dependencies or acquire data.
+
+The example computes an 8×3×5 volume twice with different impulse indices and saves arrays, readable maximum projections and digest-bearing metadata. It does not model a complete acoustic forward scene or establish reconstruction quality on measured captures. Calibration tables, raw-data licensing/access, demodulation, NMO/DMO, PSF fitting and iterative ADMM reproduction remain separate unresolved gates. No external capture was downloaded or represented as a new measurement.
+
+The numerical CI job installs only the dedicated NumPy binary pin, requires all four methods to pass without skips/expected failures, and preserves the existing dispatcher and confocal-save jobs.
+
+The first direct-DFT comparison requested 1e-10 agreement and failed by up to 1.18e-6 on NumPy 2.3.5. Instrumentation found the retained float32 PSF yields a complex64 FFT kernel and float32 regularization denominator there, while the dense reference uses complex128. Production precision and kernels were preserved. The mathematical comparison now budgets float32 machine epsilon times eight operations per FFT stage and the inverse filter's maximum gain, `sqrt(snr)/2`; it also requires a deliberately shifted crop to fail that comparison. This is a conservative rounding budget for these bounded grids, not a general FFT error theorem. The independent high-precision reference arrays were not adjusted to match observations. Historical NumPy [FFT type promotion](https://numpy.org/doc/2.2/reference/routines.fft.html#type-promotion) differs, so bit identity is asserted only within the same runtime, not across NumPy versions.
+
+
+## Iterative/headless follow-up, 2026-10-29
+
+The previous-iterate bug was reproduced from exact `fce1a03` production code:
+a constant 20 input yielded reported L1 dual residual 0 even though the independent
+previous-zero calculation was 12.44507935. The iterate is now captured before
+shrinkage. A zero-volume headless run previously entered another iteration after
+writing a converged result; convergence now exits independently of plotting.
+Optional data/output directories, headless execution and an iteration cap let
+callers execute the actual engine without graphics. Exhaustion is an explicit
+failure and is not written as a converged reconstruction. Residual/timing histories
+now include the stopping iteration. Default scene settings and plotting remain.
+
+A real PSF-to-OTF call failed on removed `np.alltrue` under NumPy 2; `np.all` now
+preserves that predicate and unused SciPy imports no longer gate NumPy-only
+operators. The zero-PSF fast path returns the requested output shape. Independent
+spatial circular convolution checks the PSF centering/FFT operator. Zero-gradient
+vector shrinkage avoids invalid divisions; the iterative LCT branch uses the same
+explicit odd-grid padding/crop lengths as the direct core.
+
+The six new numerical tests execute actual ADMM, including zero-input immediate
+convergence, changed constant inputs with an independent scalar identity-PSF
+optimum, the independently calculated first L1 dual residual, iteration exhaustion
+without a false saved success, odd-grid LCT refinement, and actual headless
+confocal saving with the real LCT engine. The old test encoding plotting-dependent
+save gating was replaced with the explicit-save contract; save_npy=False still
+preserves prior output. These are software/numerical checks, not measured-data
+quality. Baseline failures and exact source version remain in task-local evidence.
+
+
+Norm-based stopping thresholds do not themselves guarantee pointwise solution
+error. A retained threshold-adjacent probe demonstrated that distinction. The
+identity example explicitly requests tighter 1e-6 convergence tolerances and checks
+its scalar optimum separately at 1e-4 absolute plus 1e-6 relative error. The library's
+original 1e-3 defaults are unchanged. Tests include inputs below, at and above the
+L1 threshold, not just the original 20/30 examples.
+
+
+## Scaled-dual stopping and output preservation review
+
+Independent review of candidate07613fb found that the stored dual variables are
+scaled: the update is `u += Kx-z`, so the unscaled multiplier is `rho*u`.
+The dual stopping threshold now uses `rho*norm(K.T@u)`, while both absolute
+threshold terms count the actual working variables/constraints. The iterative
+LCT solver works on the padded array, not the final trimmed input grid. For
+`K=[I;D0;D1;D2]` and `N=b.size`, the variable count is N and constraint count4N.
+The default epsilon values1e-3 are unchanged. These criteria follow the official
+[scaled-dual LASSO](https://web.stanford.edu/~boyd/papers/admm/lasso/lasso.html)
+and [TV](https://web.stanford.edu/~boyd/papers/admm/total_variation/total_variation.html)
+examples with the actual stacked operator. Saved tolerance histories and working
+counts make each reported convergence decision inspectable.
+
+New independent checks build a dense K using direct spatial circular differences
+on basis vectors, without production FFT/adjoint helpers. They compare actual
+first-step residuals and thresholds for both unpadded and nonzero/zero padded LCT
+states. The reviewed candidate failed those checks; corrected code passes.
+
+The reviewed output writer also replaced existing bytes. The solver now refuses
+existing results, writes its completed result in an owned staging directory, and
+publishes with an exclusive same-directory hard link. It therefore preserves an
+existing or concurrently created target and cleans its own stage. Repeated-target
+and actual admission-to-publication collision checks preserve exact prior bytes.
+Choose a different output directory to retain and compare another run; no automatic
+overwrite option or change to the legacy filename/format was introduced.

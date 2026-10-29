@@ -158,24 +158,11 @@ class AcousticNLOSReconstruction:
         slope_x = self.dx * x_max / (self.fend/self.B * self.max_dist) * (1 + ((self.fstart/self.B)/(self.fend/self.B))**2)
         slope_y = self.dy * y_max / (self.fend/self.B * self.max_dist) * (1 + ((self.fstart/self.B)/(self.fend/self.B))**2)
         
-        # params
-        psf, fpsf = lct.getPSF(X, Y, Z, S, slope_x, slope_y)
-        mtx, mtxi = lct.interpMtx(Z, S, self.fstart/self.B * self.max_dist, self.fend/self.B * self.max_dist)
-
-        def pad_array(x, S, Z, X, Y):
-            return np.pad(x, ((S*Z//2, S*Z//2), (Y//2, Y//2), (X//2, X//2)), 'constant')
-
-        def trim_array(x, S, Z, X, Y):
-            return x[S*int(np.floor(Z/2))+1:-S*int(np.ceil(Z/2))+1, Y//2+1:-Y//2+1, X//2+1:-X//2+1]
-
-        invpsf = np.conj(fpsf) / (abs(fpsf)**2 + 1 / self.snr)
-        tdata = np.matmul(mtx, meas.reshape((Z, -1))).reshape((-1, Y, X))
-
-        fdata = fftn(pad_array(tdata, S, Z, X, Y))
-        tvol = abs(trim_array(ifftn(fdata * invpsf), S, Z, X, Y))
-        out = np.matmul(mtxi, tvol.reshape((S*Z, -1))).reshape((-1, Y, X))
-
-        return out
+        if np.shape(meas) != (Z, Y, X):
+            raise ValueError('Measurement shape must match (Z, Y, X)')
+        return lct.reconstruct(meas, S, slope_x, slope_y,
+                               self.fstart/self.B * self.max_dist,
+                               self.fend/self.B * self.max_dist, self.snr)
 
     def plot_vol(self, out, title, savefile=None):
         # display
@@ -239,13 +226,13 @@ class AcousticNLOSReconstruction:
         title = 'Confocal reconstruction'
         if self.enable_plotting:
             self.plot_vol(out, title, savefile=data_file.replace('.npy', '.png'))
-            if save_npy: 
-                out_dict = {'out': out, 'meas': meas, 'fstart_idx': self.fstart_idx,
-                            'fend_idx': self.fend_idx, 'f': self.f,
-                            'f0': self.f0, 'f1': self.f1, 'B': self.B,
-                            'fstart': self.fstart, 'fend': self.fend, 'T': self.T, 'v': self.v, 
-                            'processed_data': processed_data}
-                np.save(data_file.replace('.npy', '_out.npy'), out_dict)
+        if save_npy:
+            out_dict = {'out': out, 'meas': meas, 'fstart_idx': self.fstart_idx,
+                        'fend_idx': self.fend_idx, 'f': self.f,
+                        'f0': self.f0, 'f1': self.f1, 'B': self.B,
+                        'fstart': self.fstart, 'fend': self.fend, 'T': self.T, 'v': self.v,
+                        'processed_data': processed_data}
+            np.save(data_file.replace('.npy', '_out.npy'), out_dict)
 
     def DMO(self, cmp_stack, mp, offset):
         # log stretch over time
