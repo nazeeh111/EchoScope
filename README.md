@@ -14,6 +14,22 @@ These four standard-library checks exercise the actual scene dispatcher with its
 
 For local runs, the optional confocal-save tests need NumPy and explicitly skip without it. They use tiny synthetic arrays with plotting and LCT replaced. In CI, the existing dispatcher job is retained and a separate Python 3.12 / NumPy 2.5.4 job requires all three confocal-save methods to pass without skips or expected failures. These tests verify saved arrays and save gating, not scene reconstruction.
 
+## Compute a small LCT volume without captures
+
+The supported light-cone transform (LCT) core now runs with NumPy alone:
+
+```sh
+python3 -m venv .venv-lct
+.venv-lct/bin/python -m pip install --only-binary=:all: -r requirements-numerical.txt
+.venv-lct/bin/python examples/lct_impulse.py --output outputs/impulse-a
+.venv-lct/bin/python examples/lct_impulse.py --target 5 0 3 --output outputs/impulse-b
+.venv-lct/bin/python -m unittest discover -s tests -p test_lct_core.py -v
+```
+
+Each run computes the actual PSF, range interpolation and regularized FFT inversion used by `AcousticNLOSReconstruction.run_lct`. It writes `measurement.npy`, `volume.npy`, a readable maximum-projection CSV and `measurements.json` with parameters, array shapes, peaks and SHA-256 digests. Existing output directories are rejected. Arrays use `[range, y, x]` axes; coordinates are grid indices, not measured positions. The default 8 × 3 × 5 grid exercises the corrected odd-size padding path.
+
+The input is an ideal synthetic impulse. This demonstrates numerical reconstruction and a changed-input result, not a hidden-scene capture, physical localization accuracy, microphone calibration or demodulation. Tests compare the production core against independently constructed interpolation/PSF arrays and direct discrete Fourier transforms, without replacing the reconstruction engine. The original full-capture environment below remains separate.
+
 ## Reconstruct an external capture
 
 Run from the repository root, using the original environment versions in `requirements.txt`. These are legacy pins; a current Python installation may not accept them. The numerical pipeline and plotting defaults are retained. This is an archived research workflow, not a packaged sensing app.

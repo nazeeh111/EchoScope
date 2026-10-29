@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from numpy.fft import fft2, ifft2, ifftshift, fftn, ifftn
 
 def getPSF(X, Y, Z, S, slope_x, slope_y):
@@ -36,6 +35,39 @@ def interpMtx(M, N, start, stop):
     mtxi[np.isnan(mtxi)] = 0
 
     return mtx, mtxi
+
+def reconstruct(meas, S, slope_x, slope_y, start, stop, snr):
+    """Supported LCT core on [range, y, x] samples, using NumPy only.
+
+    Retains the research pipeline's interpolation, regularization and one-bin
+    crop offset. Odd spatial grids receive the extra pad sample on the right.
+    This computes a numerical volume; it does not validate a physical scene.
+    """
+    meas = np.asarray(meas)
+    if meas.ndim != 3 or any(n == 0 for n in meas.shape):
+        raise ValueError('meas must be a nonempty [range, y, x] volume')
+    if meas.dtype.kind not in 'buifc' or not np.isfinite(meas).all():
+        raise ValueError('meas must contain finite numeric samples')
+    if not isinstance(S, (int, np.integer)) or isinstance(S, (bool, np.bool_)) or S < 1:
+        raise ValueError('S must be a positive integer')
+    parameters = np.asarray([slope_x, slope_y, start, stop, snr], dtype=float)
+    if not np.isfinite(parameters).all() or min(slope_x, slope_y, start) < 0 or stop <= start or snr <= 0:
+        raise ValueError('Require finite nonnegative slopes, 0 <= start < stop and snr > 0')
+    Z, Y, X = meas.shape
+    _, fpsf = getPSF(X, Y, Z, S, slope_x, slope_y)
+    mtx, mtxi = interpMtx(Z, S, start, stop)
+    invpsf = np.conj(fpsf) / (abs(fpsf)**2 + 1 / snr)
+    tdata = np.matmul(mtx, meas.reshape((Z, -1))).reshape((S*Z, Y, X))
+    widths = tuple((n//2, n-n//2) for n in tdata.shape)
+    fdata = fftn(np.pad(tdata, widths, 'constant'))
+    starts = (S*(Z//2)+1, Y//2+1, X//2+1)
+    slices = tuple(slice(a, a+n) for a, n in zip(starts, tdata.shape))
+    tvol = abs(ifftn(fdata * invpsf)[slices])
+    out = np.matmul(mtxi, tvol.reshape((S*Z, -1))).reshape((Z, Y, X))
+    if not np.isfinite(out).all():
+        raise ValueError('LCT produced nonfinite output; check input scale and parameters')
+    return out
+
 
 def lct(x1, y1, t1, v, vol, snr):
     X = len(x1)
