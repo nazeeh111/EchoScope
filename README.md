@@ -48,4 +48,4 @@ See [verification](VERIFICATION.md) for exact local checks and limits. Small syn
 
 ## License
 
-The reconstruction source uses the [MIT license](LICENSE); new documentation and presentation use [MIT](LICENSE-BRANDING). Separate bundled component notices remain in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). [Source details](NOTICE.md).
+The reconstruction source uses the [MIT license](LICENSE); new documentation and presentation use [MIT](LICENSE-BRANDING). The bundled `util/pypher.py` retains its BSD license header.
