@@ -80,16 +80,22 @@ class ConfocalSaveTests(unittest.TestCase):
                         else:
                             worker.run_lct.assert_not_called()
 
-    def test_plotting_off_keeps_numpy_save_disabled(self):
+    def test_explicit_save_is_independent_of_plotting(self):
         helper = confocal_helper()
         for save in [False, True]:
             with self.subTest(save_npy=save):
                 with tempfile.TemporaryDirectory() as directory:
-                    path, _, worker, _, _ = self.fixture(directory, plotting=False)
+                    path, _, worker, _, meas = self.fixture(directory, plotting=False)
                     output = path.with_name('synthetic_out.npy')
-                    output.write_bytes(b'prior synthetic result')
+                    if not save:
+                        output.write_bytes(b'prior synthetic result')
                     self.assertIsNone(helper(worker, str(path), save_npy=save))
-                    self.assertEqual(output.read_bytes(), b'prior synthetic result')
+                    if save:
+                        saved = np.load(output, allow_pickle=True).item()
+                        np.testing.assert_array_equal(saved['meas'], meas)
+                        np.testing.assert_array_equal(saved['out'], meas)
+                    else:
+                        self.assertEqual(output.read_bytes(), b'prior synthetic result')
                     worker.plot_vol.assert_not_called()
                     worker.run_lct.assert_not_called()
 

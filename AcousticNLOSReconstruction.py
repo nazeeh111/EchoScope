@@ -226,13 +226,13 @@ class AcousticNLOSReconstruction:
         title = 'Confocal reconstruction'
         if self.enable_plotting:
             self.plot_vol(out, title, savefile=data_file.replace('.npy', '.png'))
-            if save_npy: 
-                out_dict = {'out': out, 'meas': meas, 'fstart_idx': self.fstart_idx,
-                            'fend_idx': self.fend_idx, 'f': self.f,
-                            'f0': self.f0, 'f1': self.f1, 'B': self.B,
-                            'fstart': self.fstart, 'fend': self.fend, 'T': self.T, 'v': self.v, 
-                            'processed_data': processed_data}
-                np.save(data_file.replace('.npy', '_out.npy'), out_dict)
+        if save_npy:
+            out_dict = {'out': out, 'meas': meas, 'fstart_idx': self.fstart_idx,
+                        'fend_idx': self.fend_idx, 'f': self.f,
+                        'f0': self.f0, 'f1': self.f1, 'B': self.B,
+                        'fstart': self.fstart, 'fend': self.fend, 'T': self.T, 'v': self.v,
+                        'processed_data': processed_data}
+            np.save(data_file.replace('.npy', '_out.npy'), out_dict)
 
     def DMO(self, cmp_stack, mp, offset):
         # log stretch over time

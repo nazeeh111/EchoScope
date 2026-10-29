@@ -52,9 +52,9 @@ python3 ADMMReconstruction.py letter_H
 ### Follow the files
 
 1. **Capture → calibrated frequency data:** `data/letter_H.pkl` becomes `data/letter_H.npy`. An available `letter_H_bg.pkl` is demodulated separately for background subtraction. Existing demodulated arrays are reused unless the source's `overwrite_raw` option is changed.
-2. **Initial reconstruction:** the default plotting path writes `data/letter_H.png` and `data/letter_H_out.npy`. The latter holds the volume and metadata consumed by iterative refinement. Turning off `enable_plotting` also disables this save in the retained implementation.
+2. **Initial reconstruction:** the default plotting path writes `data/letter_H.png` and `data/letter_H_out.npy`. The latter holds the volume and metadata consumed by iterative refinement. An explicit `save_npy=True` saves this volume independently of `enable_plotting`.
 3. **PSF fit:** `FitGaussianPSF.py` reads `data/psf_out.npy`, opens its fit plots, then writes `data/psf_gaussian.npy` and `data/psf_gaussian_params.npy`.
-4. **Iterative result:** on convergence, `ADMMReconstruction.py` writes `chimera/raw/letter_H_admm_out.npy`. That inherited output directory must exist. Use a working copy of prior results: plotting, fitting and final-save paths can replace files with the same names.
+4. **Iterative result:** on convergence, `ADMMReconstruction.py` writes `chimera/raw/letter_H_admm_out.npy`. The output directory is created when a result converges. Use a working copy of prior results: plotting, fitting and final-save paths can replace files with the same names.
 
 Initial reconstruction supports `double`, `letter_H`, `corner_reflectors`, `psf`, `resolution_corner1m`, `resolution_corner2m`, `resolution_plane1m`, `resolution_plane2m` and `letters_LT`. The `all` selector dispatches them in that order. Iterative refinement supports only `double`, `letter_H`, `corner_reflectors` and `letters_LT`.
 
@@ -67,3 +67,31 @@ See [verification](VERIFICATION.md) for exact local checks and limits. Small syn
 ## License
 
 The reconstruction source uses the [MIT license](LICENSE); new documentation and presentation use [MIT](LICENSE-BRANDING). Separate bundled component notices remain in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). [Source details](NOTICE.md).
+
+
+## Bounded headless iterative example
+
+The production ADMM refinement engine can also run without plotting or captures:
+
+```sh
+python -m pip install -r requirements-numerical.txt
+python examples/admm_identity.py --output admm-20 --level 20
+python examples/admm_identity.py --output admm-30 --level 30
+```
+
+Each new directory contains an original constant-volume/identity-PSF fixture,
+actual refined volume, solver trace, convergence residuals and a hash manifest.
+The independent scalar optimum is `max(level - 0.9, 0)` because spatial TV is
+zero for this ideal constant input. The example requests 1e-6 norm-based convergence tolerances and separately checks
+the scalar optimum; these are not measured hidden-scene reconstruction results.
+Existing example directories are refused.
+
+For trusted local reconstruction dictionaries, `ADMMReconstruction.run(scene,
+data_dir=..., output_dir=..., max_iters=..., plotting=False)` retains the original
+scene presets and supports bounded headless refinement. Optional
+`absolute_tolerance` and `relative_tolerance` retain the original 1e-3 defaults. Iteration exhaustion
+raises a clear error rather than saving an unconverged volume as converged.
+These legacy `.npy` dictionaries use pickle metadata and must come from a trusted
+source. Existing raw-capture/PSF acquisition and real-scene quality gates remain.
+Explicit `save_npy=True` now saves the confocal volume whether plotting is enabled
+or disabled. Plot-only default calls still do not request a NumPy save.

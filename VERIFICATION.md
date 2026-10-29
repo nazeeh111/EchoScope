@@ -1,5 +1,9 @@
 # Local verification
 
+The sections below record successive checkpoints. Earlier statements about
+plotting-dependent saves and unexecuted iterative code describe earlier source;
+the final iterative/headless section supersedes them for current source.
+
 Numerical checks executed 2026-09-22; command-line dispatch checked 2026-09-23. These are bounded local checks, not research replication.
 
 - At that earlier checkpoint, the publication compared 25 numerical source, calibration, and related files byte-for-byte. After the command-line fix below, 24 remained byte-identical; `AcousticNLOSReconstruction.py` differed only in the corrected dispatch assignment. Its entire reconstruction class and numerical methods were unchanged at that checkpoint.
@@ -43,3 +47,40 @@ The example computes an 8×3×5 volume twice with different impulse indices and 
 The numerical CI job installs only the dedicated NumPy binary pin, requires all four methods to pass without skips/expected failures, and preserves the existing dispatcher and confocal-save jobs.
 
 The first direct-DFT comparison requested 1e-10 agreement and failed by up to 1.18e-6 on NumPy 2.3.5. Instrumentation found the retained float32 PSF yields a complex64 FFT kernel and float32 regularization denominator there, while the dense reference uses complex128. Production precision and kernels were preserved. The mathematical comparison now budgets float32 machine epsilon times eight operations per FFT stage and the inverse filter's maximum gain, `sqrt(snr)/2`; it also requires a deliberately shifted crop to fail that comparison. This is a conservative rounding budget for these bounded grids, not a general FFT error theorem. The independent high-precision reference arrays were not adjusted to match observations. Historical NumPy [FFT type promotion](https://numpy.org/doc/2.2/reference/routines.fft.html#type-promotion) differs, so bit identity is asserted only within the same runtime, not across NumPy versions.
+
+
+## Iterative/headless follow-up, 2026-10-29
+
+The previous-iterate bug was reproduced from exact `fce1a03` production code:
+a constant 20 input yielded reported L1 dual residual 0 even though the independent
+previous-zero calculation was 12.44507935. The iterate is now captured before
+shrinkage. A zero-volume headless run previously entered another iteration after
+writing a converged result; convergence now exits independently of plotting.
+Optional data/output directories, headless execution and an iteration cap let
+callers execute the actual engine without graphics. Exhaustion is an explicit
+failure and is not written as a converged reconstruction. Residual/timing histories
+now include the stopping iteration. Default scene settings and plotting remain.
+
+A real PSF-to-OTF call failed on removed `np.alltrue` under NumPy 2; `np.all` now
+preserves that predicate and unused SciPy imports no longer gate NumPy-only
+operators. The zero-PSF fast path returns the requested output shape. Independent
+spatial circular convolution checks the PSF centering/FFT operator. Zero-gradient
+vector shrinkage avoids invalid divisions; the iterative LCT branch uses the same
+explicit odd-grid padding/crop lengths as the direct core.
+
+The six new numerical tests execute actual ADMM, including zero-input immediate
+convergence, changed constant inputs with an independent scalar identity-PSF
+optimum, the independently calculated first L1 dual residual, iteration exhaustion
+without a false saved success, odd-grid LCT refinement, and actual headless
+confocal saving with the real LCT engine. The old test encoding plotting-dependent
+save gating was replaced with the explicit-save contract; save_npy=False still
+preserves prior output. These are software/numerical checks, not measured-data
+quality. Baseline failures and exact source version remain in task-local evidence.
+
+
+Norm-based stopping thresholds do not themselves guarantee pointwise solution
+error. A retained threshold-adjacent probe demonstrated that distinction. The
+identity example explicitly requests tighter 1e-6 convergence tolerances and checks
+its scalar optimum separately at 1e-4 absolute plus 1e-6 relative error. The library's
+original 1e-3 defaults are unchanged. Tests include inputs below, at and above the
+L1 threshold, not just the original 20/30 examples.

@@ -43,8 +43,6 @@ from __future__ import absolute_import, print_function, division
 
 import numpy as np
 
-from scipy.ndimage import rotate, zoom
-
 __version__ = '0.6.4'
 
 
@@ -74,7 +72,7 @@ def zero_pad(image, shape, position='corner'):
     shape = np.asarray(shape, dtype=int)
     imshape = np.asarray(image.shape, dtype=int)
 
-    if np.alltrue(imshape == shape):
+    if np.all(imshape == shape):
         return image
 
     if np.any(shape <= 0):
@@ -148,7 +146,7 @@ def psf2otf(psf, shape):
 
     """
     if np.all(psf == 0):
-        return np.zeros_like(psf)
+        return np.zeros(shape, dtype=psf.dtype)
 
     inshape = psf.shape
     # Pad the PSF to outsize

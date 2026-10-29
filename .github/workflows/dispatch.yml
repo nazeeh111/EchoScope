@@ -57,12 +57,15 @@ jobs:
           architecture: x64
       - name: Install the independent numerical subset
         run: "python -m pip install --only-binary=:all: --no-deps -r requirements-numerical.txt"
-      - name: Require real LCT and changed-input checks without skips
+      - name: Require real LCT, iterative ADMM and changed-input checks without skips
         run: |
           python - <<'PYTEST'
           import unittest
-          suite = unittest.defaultTestLoader.discover('tests', pattern='test_lct_core.py')
+          suite = unittest.TestSuite([
+              unittest.defaultTestLoader.discover('tests', pattern='test_lct_core.py'),
+              unittest.defaultTestLoader.discover('tests', pattern='test_admm_core.py'),
+          ])
           result = unittest.TextTestRunner(verbosity=2).run(suite)
-          if result.testsRun != 4 or result.skipped or result.expectedFailures or not result.wasSuccessful():
-              raise SystemExit('Expected four passing production-core methods without skips.')
+          if result.testsRun != 10 or result.skipped or result.expectedFailures or not result.wasSuccessful():
+              raise SystemExit('Expected ten passing production-core methods without skips.')
           PYTEST
