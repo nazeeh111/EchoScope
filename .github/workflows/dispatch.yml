@@ -66,6 +66,6 @@ jobs:
               unittest.defaultTestLoader.discover('tests', pattern='test_admm_core.py'),
           ])
           result = unittest.TextTestRunner(verbosity=2).run(suite)
-          if result.testsRun != 10 or result.skipped or result.expectedFailures or not result.wasSuccessful():
-              raise SystemExit('Expected ten passing production-core methods without skips.')
+          if result.testsRun != 12 or result.skipped or result.expectedFailures or not result.wasSuccessful():
+              raise SystemExit('Expected twelve passing production-core methods without skips.')
           PYTEST

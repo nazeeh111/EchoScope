@@ -84,3 +84,31 @@ identity example explicitly requests tighter 1e-6 convergence tolerances and che
 its scalar optimum separately at 1e-4 absolute plus 1e-6 relative error. The library's
 original 1e-3 defaults are unchanged. Tests include inputs below, at and above the
 L1 threshold, not just the original 20/30 examples.
+
+
+## Scaled-dual stopping and output preservation review
+
+Independent review of candidate07613fb found that the stored dual variables are
+scaled: the update is `u += Kx-z`, so the unscaled multiplier is `rho*u`.
+The dual stopping threshold now uses `rho*norm(K.T@u)`, while both absolute
+threshold terms count the actual working variables/constraints. The iterative
+LCT solver works on the padded array, not the final trimmed input grid. For
+`K=[I;D0;D1;D2]` and `N=b.size`, the variable count is N and constraint count4N.
+The default epsilon values1e-3 are unchanged. These criteria follow the official
+[scaled-dual LASSO](https://web.stanford.edu/~boyd/papers/admm/lasso/lasso.html)
+and [TV](https://web.stanford.edu/~boyd/papers/admm/total_variation/total_variation.html)
+examples with the actual stacked operator. Saved tolerance histories and working
+counts make each reported convergence decision inspectable.
+
+New independent checks build a dense K using direct spatial circular differences
+on basis vectors, without production FFT/adjoint helpers. They compare actual
+first-step residuals and thresholds for both unpadded and nonzero/zero padded LCT
+states. The reviewed candidate failed those checks; corrected code passes.
+
+The reviewed output writer also replaced existing bytes. The solver now refuses
+existing results, writes its completed result in an owned staging directory, and
+publishes with an exclusive same-directory hard link. It therefore preserves an
+existing or concurrently created target and cleans its own stage. Repeated-target
+and actual admission-to-publication collision checks preserve exact prior bytes.
+Choose a different output directory to retain and compare another run; no automatic
+overwrite option or change to the legacy filename/format was introduced.

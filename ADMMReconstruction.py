@@ -31,6 +31,7 @@ from types import SimpleNamespace
 from time import time
 import sys
 from pathlib import Path
+import tempfile
 
 plot_every = 5 
 do_plots = True
@@ -91,12 +92,16 @@ def run(scene, *, data_dir='data', output_dir='chimera/raw', max_iters=100000,
     if (tolerances.shape != (2,) or not np.isfinite(tolerances).all()
             or np.any(tolerances <= 0)):
         raise ValueError('Convergence tolerances must be finite positive scalars')
+    data_dir, output_dir = Path(data_dir), Path(output_dir)
+    out_fname = scene + '_admm_out.npy'
+    output_path = output_dir / out_fname
+    if os.path.lexists(output_path):
+        raise FileExistsError('Refusing to replace existing ADMM result: {}. Choose a new output directory.'.format(output_path))
     enable_plotting = do_plots if plotting is None else bool(plotting)
     if enable_plotting:
         import matplotlib
         import matplotlib.pyplot as plt
         matplotlib.rcParams.update({'font.size': 6})
-    data_dir, output_dir = Path(data_dir), Path(output_dir)
 
     # set parameters
     finished = False
@@ -109,7 +114,6 @@ def run(scene, *, data_dir='data', output_dir='chimera/raw', max_iters=100000,
     eps_abs, eps_rel = tolerances
 
     ckpt = np.load(data_dir / (scene + '_out.npy'), allow_pickle=True)[()]
-    out_fname = scene + '_admm_out.npy'
 
     if scene == 'letter_H':
         rho = 1e-1
@@ -239,6 +243,8 @@ def run(scene, *, data_dir='data', output_dir='chimera/raw', max_iters=100000,
     u4 = np.zeros((b.shape))
     primal_residual = []
     dual_residual = []
+    primal_tolerance = []
+    dual_tolerance = []
     timing = []
 
     assert(use_l1 or use_tv)
@@ -322,8 +328,12 @@ def run(scene, *, data_dir='data', output_dir='chimera/raw', max_iters=100000,
         ktu_norm = np.sqrt(np.sum(ktu.ravel()**2))
         kx_norm = np.sqrt(kx_norm)
         z_norm = np.sqrt(z_norm)
-        eps_pri = eps_abs * np.sqrt(N_scale*Nx*Ny*Nt) + eps_rel * np.maximum(kx_norm, z_norm)
-        eps_dual = eps_abs * np.sqrt(Nx*Ny*Nt)  + eps_rel * ktu_norm
+        # K stacks the active identity and three circular differences. x has
+        # b.size variables, including the padded LCT grid; z has N_scale times
+        # that many constraints. u is the SCALED dual (y = rho*u), so the dual
+        # threshold uses ||K.T*y|| = rho*||K.T*u||.
+        eps_pri = eps_abs * np.sqrt(N_scale*b.size) + eps_rel * np.maximum(kx_norm, z_norm)
+        eps_dual = eps_abs * np.sqrt(b.size) + eps_rel * rho * ktu_norm
 
         print('Iter: {}'.format(i))
         print('===Primal/Dual Thresholds===')
@@ -333,6 +343,8 @@ def run(scene, *, data_dir='data', output_dir='chimera/raw', max_iters=100000,
         print()
         primal_residual.append(resid_pri)
         dual_residual.append(resid_dual)
+        primal_tolerance.append(eps_pri)
+        dual_tolerance.append(eps_dual)
 
         # check stopping criterion
         if resid_pri < eps_pri and resid_dual < eps_dual:
@@ -344,9 +356,21 @@ def run(scene, *, data_dir='data', output_dir='chimera/raw', max_iters=100000,
 
             timing.append(time() - start)
             out_dict = {'out': x_out, 'iter': i, 'primal_residual': primal_residual,
-                        'timing': timing, 'dual_residual': dual_residual, 'converged': True}
+                        'timing': timing, 'dual_residual': dual_residual, 'converged': True,
+                        'primal_tolerance': primal_tolerance, 'dual_tolerance': dual_tolerance,
+                        'working_shape': b.shape, 'variable_count': b.size,
+                        'constraint_count': N_scale*b.size}
             output_dir.mkdir(parents=True, exist_ok=True)
-            np.save(output_dir / out_fname, out_dict)
+            # Write fully in an owned staging directory, then publish with an
+            # exclusive hard link. Unlike replace/np.save(path), link cannot
+            # clobber an output created after the admission check above.
+            with tempfile.TemporaryDirectory(prefix='.admm-', dir=output_dir) as staging:
+                staged = Path(staging) / out_fname
+                np.save(staged, out_dict)
+                try:
+                    os.link(staged, output_path)
+                except FileExistsError as error:
+                    raise FileExistsError('Refusing to replace existing ADMM result: {}. Choose a new output directory.'.format(output_path)) from error
             finished = True
 
         if not finished:

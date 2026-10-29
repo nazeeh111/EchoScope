@@ -46,7 +46,11 @@ def main():
                   reference_tolerance=dict(absolute=1e-4, relative=1e-6),
                   converged=result['converged'], iterations=result['iter']+1,
                   final_primal_residual=result['primal_residual'][-1],
-                  final_dual_residual=result['dual_residual'][-1], numpy_version=np.__version__,
+                  final_dual_residual=result['dual_residual'][-1],
+                  final_primal_tolerance=result['primal_tolerance'][-1],
+                  final_dual_tolerance=result['dual_tolerance'][-1],
+                  working_shape=list(result['working_shape']), variable_count=result['variable_count'],
+                  constraint_count=result['constraint_count'], numpy_version=np.__version__,
                   files_sha256={str(p.relative_to(args.output)):hashlib.sha256(p.read_bytes()).hexdigest()
                                 for p in sorted(args.output.rglob('*')) if p.is_file()})
     (args.output/'measurements.json').write_text(json.dumps(report, indent=2, allow_nan=False)+'\n')
