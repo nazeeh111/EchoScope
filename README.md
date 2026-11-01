@@ -4,15 +4,7 @@
 
 Reconstruct hidden scenes from frequency-swept acoustic measurements. The workflow includes microphone calibration, demodulation, initial volume reconstruction, point-spread-function fitting, and iterative refinement.
 
-## Inspect the command path without captures
-
-```sh
-python3 -m unittest discover -s tests -v
-```
-
-These four standard-library checks exercise the actual scene dispatcher with its expensive reconstruction worker replaced. They verify scene selection and order without installing the legacy numerical stack or loading measurements. They do not reconstruct a hidden scene.
-
-For local runs, the optional confocal-save tests need NumPy and explicitly skip without it. They use tiny synthetic arrays with plotting and LCT replaced. In CI, the existing dispatcher job is retained and a separate Python 3.12 / NumPy 2.5.4 job requires all three confocal-save methods to pass without skips or expected failures. These tests verify saved arrays and save gating, not scene reconstruction.
+[Reconstruct a capture](#reconstruct-an-external-capture) · [Check dispatch without data](#check-dispatch-without-captures) · [Verification](VERIFICATION.md)
 
 ## Reconstruct an external capture
 
@@ -47,6 +39,16 @@ The defaults use a 48 kHz sample rate, 2–20 kHz chirp and 16 transmit/receive 
 ## Verification
 
 See [verification](VERIFICATION.md) for exact local checks and limits. Small synthetic kernels establish numerical consistency, not captured-scene replication. `util/lct.py` includes an unused standalone `lct` helper with an inherited argument mismatch; the main reconstruction uses `run_lct` instead.
+
+### Check dispatch without captures
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+These four standard-library checks exercise the actual scene dispatcher with its expensive reconstruction worker replaced. They verify scene selection and order without installing the legacy numerical stack or loading measurements. They do not reconstruct a hidden scene.
+
+For local runs, the optional confocal-save tests need NumPy and explicitly skip without it. They use tiny synthetic arrays with plotting and LCT replaced. In CI, the existing dispatcher job is retained and a separate Python 3.12 / NumPy 2.5.4 job requires all three confocal-save methods to pass without skips or expected failures. These tests verify saved arrays and save gating, not scene reconstruction.
 
 ## License
 
